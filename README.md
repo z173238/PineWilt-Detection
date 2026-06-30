@@ -1,93 +1,208 @@
-# PineWilt Detection
+# 松材线虫病枯死树目标检测
 
+基于 [Ultralytics YOLO](https://github.com/ultralytics/ultralytics) 框架的无人机遥感影像枯死树（松材线虫病）检测系统。
 
+## 算法简介
 
-## Getting started
+采用 **YOLO26l** 目标检测模型，对大幅面无人机正射影像（GeoTIFF）进行**滑窗推理**：
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+1. **瓦片切分** — 将超大 GeoTIFF 按 640×640 像素切分为瓦片，相邻瓦片重叠 128 像素以避免边界漏检
+2. **图像归一化** — 逐波段 2%–98% 百分位拉伸至 uint8，适配多光谱/高光谱无人机数据
+3. **批量推理** — 每批 8 个瓦片送入 YOLO 模型进行目标检测
+4. **全局 NMS** — 跨瓦片合并重叠区域的重复检测框，按类别执行贪心非极大值抑制
+5. **坐标输出** — 像素坐标转换为地理坐标（CRS），输出 ESRI Shapefile
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
+### 模型指标
 
-## Add your files
+| 指标 | 值 |
+|------|-----|
+| 模型 | YOLO26l |
+| mAP@0.5 | **0.8549** |
+| mAP@0.5:0.95 | **0.4003** |
+| 输入尺寸 | 640×640 |
+| 类别数 | 1 (`bad_tree`) |
+| 训练集 | 4301 张 |
+| 硬件 | 2×RTX 5090 32GB |
+| 训练轮次 | 70（best at epoch 20） |
 
-- [ ] [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-- [ ] [Add files using the command line](https://docs.gitlab.com/ee/gitlab-basics/add-file.html#add-a-file-using-the-command-line) or push an existing Git repository with the following command:
+## 目录结构
 
 ```
-cd existing_repo
-git remote add origin http://gitlab.htwisdom.local/qinhong/pinewilt-detection.git
-git branch -M main
-git push -uf origin main
+├── predict.py              # 统一推理入口
+├── train.py                # 模型训练脚本
+├── evaluate.py             # 模型评估脚本
+├── pine_wilt/              # 推理核心包
+│   ├── __init__.py
+│   ├── engine.py           # 推理流水线编排（子进程容错）
+│   ├── tiling.py           # GeoTIFF 瓦片切分与归一化
+│   ├── inference.py        # YOLO 模型加载与批量推理
+│   └── postprocess.py      # NMS 与 Shapefile 输出
+├── datasetyolov11/         # 训练数据集
+├── ultralytics/            # YOLO 核心框架
+└── runs/                   # 训练/推理输出（gitignore）
 ```
 
-## Integrate with your tools
+## 环境要求
 
-- [ ] [Set up project integrations](http://gitlab.htwisdom.local/qinhong/pinewilt-detection/-/settings/integrations)
+- Python >= 3.8
+- PyTorch >= 1.8.0（推荐 CUDA 版本）
+- 地理数据库：rasterio、fiona、shapely
 
-## Collaborate with your team
+```bash
+# 安装 ultralytics 核心依赖
+pip install -e .
 
-- [ ] [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-- [ ] [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-- [ ] [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-- [ ] [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-- [ ] [Set auto-merge](https://docs.gitlab.com/ee/user/project/merge_requests/merge_when_pipeline_succeeds.html)
+# 安装地理数据处理依赖
+pip install rasterio fiona shapely
+```
 
-## Test and Deploy
+## 快速开始
 
-Use the built-in continuous integration in GitLab.
+### 1. 获取数据集
 
-- [ ] [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/)
-- [ ] [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-- [ ] [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-- [ ] [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-- [ ] [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
+数据集来自 Roboflow（松材线虫病树检测，CC BY 4.0 许可）：
 
-***
+```bash
+# 方式一：直接从 Roboflow 下载
+# https://universe.roboflow.com/project-dkq3q/-9pmdt/dataset/8
 
-# Editing this README
+# 方式二：使用 Roboflow API（需先 pip install roboflow）
+python -c "
+from roboflow import Roboflow
+rf = Roboflow(api_key='YOUR_API_KEY')
+project = rf.workspace('project-dkq3q').project('-9pmdt')
+dataset = project.version(8).download('yolov8')
+"
+```
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+下载后将数据集目录命名为 `datasetyolov11/` 放在项目根目录，结构如下：
 
-## Suggestions for a good README
+```
+datasetyolov11/
+├── data.yaml
+├── train/images/   # 4301 张训练图片
+├── train/labels/   # YOLO 格式标注
+├── valid/images/   # 验证集
+├── valid/labels/
+├── test/images/    # 测试集
+└── test/labels/
+```
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+### 2. 获取预训练权重
 
-## Name
-Choose a self-explaining name for your project.
+```bash
+wget https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo26l.pt
+```
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+### 3. 训练模型
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
+```bash
+python train.py
+```
 
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+默认使用 `datasetyolov11/` 数据集和 `yolo26l.pt` 预训练权重，输出至 `runs/pine_wilt/`。
 
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+训练配置可在 `train.py` 顶部的配置区域修改（epochs、batch、device 等）。
 
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
+### 4. 推理
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
+**基本用法：**
 
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
+```bash
+python predict.py --image /path/to/uav_image.tif --out results/detections.shp
+```
 
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
+**常用参数：**
 
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
+```bash
+python predict.py \
+  --image /path/to/uav_image.tif \
+  --out results/detections.shp \
+  --model runs/detect/runs/pine_wilt/yolo26l_exp2/weights/best.pt \
+  --device 0 \
+  --conf 0.25 \
+  --batch-size 8
+```
 
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
+**双 GPU 并行推理：**
 
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
+```bash
+# 获取总瓦片数
+TOTAL=$(python -c "
+from pine_wilt.tiling import get_tile_records
+import rasterio
+with rasterio.open('image.tif') as ds:
+    print(len(get_tile_records(ds, 640, 128)))
+")
+MID=$((TOTAL / 2))
 
-## License
-For open source projects, say how it is licensed.
+python predict.py --image image.tif --out gpu0.shp --device 0 --start-tile 1 --end-tile $MID &
+python predict.py --image image.tif --out gpu1.shp --device 1 --start-tile $((MID+1)) --end-tile $TOTAL &
+wait
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+ogrmerge.py -single -o merged.shp gpu0.shp gpu1.shp
+```
+
+### 5. 模型评估
+
+```bash
+# 修改 evaluate.py 中的 MODEL_PATH 为实际 best.pt 路径后运行
+python evaluate.py
+```
+
+## 推理参数说明
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `--image` | (必填) | 输入 GeoTIFF 影像路径 |
+| `--out` | (必填) | 输出 Shapefile 路径 |
+| `--model` | best.pt | YOLO 模型权重路径 |
+| `--conf` | 0.25 | 置信度阈值 |
+| `--iou` | 0.7 | 瓦片级 NMS IoU 阈值 |
+| `--merge-iou` | 0.5 | 全局跨瓦片 NMS IoU 阈值 |
+| `--tile-size` | 640 | 瓦片像素尺寸 |
+| `--overlap` | 128 | 瓦片间重叠像素 |
+| `--imgsz` | 640 | YOLO 推理图像尺寸 |
+| `--batch-size` | 8 | 每批推理瓦片数 |
+| `--chunk-size` | 50 | 每个子进程处理的瓦片数 |
+| `--device` | 0 | 推理设备（"0", "cpu" 等） |
+| `--max-det` | 300 | 每瓦片最大检测数 |
+| `--start-tile` | 1 | 起始瓦片索引（1-based） |
+| `--end-tile` | 0 | 结束瓦片索引（0=全部） |
+| `--skip-tiles` | "" | 跳过的瓦片索引（逗号分隔） |
+| `--keep-tiles` | False | 保留缓存 PNG 瓦片 |
+| `--no-subprocess` | False | 禁用子进程容错 |
+| `--debug` | False | 打印瓦片级调试信息 |
+
+## 容错机制
+
+脚本采用**子进程 + 二分重试**的容错策略：
+
+- 每 `chunk_size`（默认 50）个瓦片启动一个独立子进程执行推理，避免 GPU 显存累积
+- 子进程崩溃时，自动将瓦片范围对半拆分并分别重试
+- 单个瓦片重试失败后记录到 `.crashed_tiles.txt`，不阻塞其余瓦片
+- 推理结束后打印失败瓦片列表，可根据 crash log 用 `--skip-tiles` 跳过重跑
+
+## 输出 Shapefile 字段
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `cls_id` | int | 类别 ID |
+| `cls_name` | str | 类别名称 |
+| `conf` | float | 置信度 |
+| `x1_pix` | float | 检测框左上角 X（像素坐标） |
+| `y1_pix` | float | 检测框左上角 Y（像素坐标） |
+| `x2_pix` | float | 检测框右下角 X（像素坐标） |
+| `y2_pix` | float | 检测框右下角 Y（像素坐标） |
+| `tile_id` | int | 来源瓦片编号 |
+
+## 更新日志
+
+- **2025-06-30** — 工程化重构：统一 `predict.py` 入口，模块化 `pine_wilt/` 包，完善 README
+- **2025-06-01** — 新增双 GPU 并行推理、子进程容错与崩溃重试机制
+- **2025-05-27** — YOLO26l 实验 2（最终训练），SGD 优化器 + label smoothing + weight decay
+- **2025-05-26** — 项目初始化，YOLO11l / YOLO26l 基线实验
+
+## 许可
+
+本项目基于 [Ultralytics AGPL-3.0](LICENSE) 许可协议。
