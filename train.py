@@ -1,16 +1,17 @@
 """
 松材线虫病目标检测 - YOLO26l 训练脚本
 使用官方 yolo26l.pt 预训练权重
-将整个项目目录上传服务器后，直接运行此脚本，无需修改路径
+将整个项目目录上传服务器后，直接运行此脚本，无需修改路径.
 """
 
 from pathlib import Path
+
 from ultralytics import YOLO
 
 # ========== 配置区域（如需调整可修改这里）==========
 EPOCHS = 150
 IMGSZ = 640
-BATCH = 64      # 2×RTX5090 32GB，每卡 32，显存盈余大
+BATCH = 64  # 2×RTX5090 32GB，每卡 32，显存盈余大
 PATIENCE = 50
 PROJECT = "runs/pine_wilt"
 NAME = "yolo26l_exp2"
