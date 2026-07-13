@@ -80,8 +80,9 @@ def parse_skip_tiles(skip_tiles: str) -> set:
     return {int(x.strip()) for x in skip_tiles.split(",") if x.strip()}
 
 
-def write_tile(dataset, record: dict, tile_cache_dir, tile_size: int = 640,
-               debug: bool = False, overwrite: bool = False):
+def write_tile(
+    dataset, record: dict, tile_cache_dir, tile_size: int = 640, debug: bool = False, overwrite: bool = False
+):
     """从影像读取一个瓦片，写入 PNG 缓存文件.
 
     Args:
