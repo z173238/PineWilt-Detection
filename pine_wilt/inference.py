@@ -6,6 +6,7 @@
 import numpy as np
 import torch
 from PIL import Image
+
 from ultralytics import YOLO
 from ultralytics.utils import nms
 
@@ -32,18 +33,17 @@ def letterbox_rgb(image: np.ndarray, size: int) -> tuple:
     """
     height, width = image.shape[:2]
     gain = min(size / height, size / width)
-    new_width = int(round(width * gain))
-    new_height = int(round(height * gain))
+    new_width = round(width * gain)
+    new_height = round(height * gain)
     resized = Image.fromarray(image).resize((new_width, new_height), Image.BILINEAR)
     canvas = Image.new("RGB", (size, size), (114, 114, 114))
-    pad_x = int(round((size - new_width) / 2 - 0.1))
-    pad_y = int(round((size - new_height) / 2 - 0.1))
+    pad_x = round((size - new_width) / 2 - 0.1)
+    pad_y = round((size - new_height) / 2 - 0.1)
     canvas.paste(resized, (pad_x, pad_y))
     return np.asarray(canvas, dtype=np.uint8), gain, pad_x, pad_y
 
 
-def scale_letterbox_boxes(boxes: np.ndarray, gain: float, pad_x: int, pad_y: int,
-                          original_shape: tuple) -> np.ndarray:
+def scale_letterbox_boxes(boxes: np.ndarray, gain: float, pad_x: int, pad_y: int, original_shape: tuple) -> np.ndarray:
     """将 letterbox 空间中的边界框映射回原始图像坐标."""
     boxes[:, [0, 2]] -= pad_x
     boxes[:, [1, 3]] -= pad_y
@@ -63,8 +63,7 @@ def get_class_name(names, cls_id: int) -> str:
     return cls_id
 
 
-def predict_png_batch(model, batch: list, conf: float, iou: float,
-                      max_det: int = 300, imgsz: int = 640) -> list:
+def predict_png_batch(model, batch: list, conf: float, iou: float, max_det: int = 300, imgsz: int = 640) -> list:
     """对一批 PNG 瓦片执行 YOLO 推理.
 
     Args:
@@ -85,9 +84,7 @@ def predict_png_batch(model, batch: list, conf: float, iou: float,
     for item in batch:
         rgb = np.asarray(Image.open(item["path"]).convert("RGB"), dtype=np.uint8)
         padded, gain, pad_x, pad_y = letterbox_rgb(rgb, imgsz)
-        tensor = torch.tensor(
-            np.ascontiguousarray(padded.transpose(2, 0, 1)).copy(), dtype=torch.float32
-        ) / 255.0
+        tensor = torch.tensor(np.ascontiguousarray(padded.transpose(2, 0, 1)).copy(), dtype=torch.float32) / 255.0
         tensors.append(tensor)
         meta.append((rgb.shape, gain, pad_x, pad_y))
     device = next(model.model.parameters()).device
