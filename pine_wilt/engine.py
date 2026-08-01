@@ -12,15 +12,15 @@ from pathlib import Path
 
 import rasterio
 
-from pine_wilt.tiling import get_tile_records, parse_skip_tiles, write_tile
 from pine_wilt.inference import load_model, predict_png_batch
 from pine_wilt.postprocess import add_detection_geometries, save_shapefile
+from pine_wilt.tiling import get_tile_records, parse_skip_tiles, write_tile
 
 
 def batched(items: list, batch_size: int):
     """将列表按 batch_size 分组迭代."""
     for start in range(0, len(items), batch_size):
-        yield items[start: start + batch_size]
+        yield items[start : start + batch_size]
 
 
 def run_worker(args):
@@ -41,8 +41,12 @@ def run_worker(args):
             if tile_id < worker_start or tile_id > worker_end or tile_id in skip_tiles:
                 continue
             png_path = write_tile(
-                dataset, record, tile_cache_dir,
-                tile_size=args.tile_size, debug=args.debug, overwrite=args.overwrite_tiles,
+                dataset,
+                record,
+                tile_cache_dir,
+                tile_size=args.tile_size,
+                debug=args.debug,
+                overwrite=args.overwrite_tiles,
             )
             if png_path is None:
                 continue
@@ -52,10 +56,16 @@ def run_worker(args):
     model = load_model(str(model_path), args.device)
     detections = []
     for batch in batched(candidates, max(1, args.batch_size)):
-        detections.extend(predict_png_batch(
-            model, batch,
-            conf=args.conf, iou=args.iou, max_det=args.max_det, imgsz=args.imgsz,
-        ))
+        detections.extend(
+            predict_png_batch(
+                model,
+                batch,
+                conf=args.conf,
+                iou=args.iou,
+                max_det=args.max_det,
+                imgsz=args.imgsz,
+            )
+        )
         last_tile = batch[-1]["tile_id"]
         if args.log_every > 0:
             print(f"Predicted through tile {last_tile}, detections={len(detections)}", flush=True)
@@ -71,31 +81,48 @@ def run_worker(args):
     print(f"Saved worker detections JSON: {worker_json}", flush=True)
 
 
-def _run_child_process(args, start_tile: int, end_tile: int, temp_dir: Path,
-                       crashed_tiles: list) -> list:
+def _run_child_process(args, start_tile: int, end_tile: int, temp_dir: Path, crashed_tiles: list) -> list:
     """启动一个子进程处理瓦片范围；崩溃时二分重试."""
     json_path = temp_dir / f"detections_{start_tile}_{end_tile}.json"
     cmd = [
         sys.executable,
         str(Path(__file__).resolve().parent.parent / "predict.py"),
-        "--image", str(args.image),
-        "--model", str(args.model),
-        "--out", str(args.out),
-        "--tile-cache-dir", str(args.tile_cache_dir),
-        "--tile-size", str(args.tile_size),
-        "--overlap", str(args.overlap),
-        "--imgsz", str(args.imgsz),
-        "--conf", str(args.conf),
-        "--iou", str(args.iou),
-        "--merge-iou", str(args.merge_iou),
-        "--device", str(args.device),
-        "--max-det", str(args.max_det),
-        "--batch-size", str(args.batch_size),
-        "--log-every", str(args.log_every),
-        "--skip-tiles", args.skip_tiles,
-        "--worker-json", str(json_path),
-        "--worker-start-tile", str(start_tile),
-        "--worker-end-tile", str(end_tile),
+        "--image",
+        str(args.image),
+        "--model",
+        str(args.model),
+        "--out",
+        str(args.out),
+        "--tile-cache-dir",
+        str(args.tile_cache_dir),
+        "--tile-size",
+        str(args.tile_size),
+        "--overlap",
+        str(args.overlap),
+        "--imgsz",
+        str(args.imgsz),
+        "--conf",
+        str(args.conf),
+        "--iou",
+        str(args.iou),
+        "--merge-iou",
+        str(args.merge_iou),
+        "--device",
+        str(args.device),
+        "--max-det",
+        str(args.max_det),
+        "--batch-size",
+        str(args.batch_size),
+        "--log-every",
+        str(args.log_every),
+        "--skip-tiles",
+        args.skip_tiles,
+        "--worker-json",
+        str(json_path),
+        "--worker-start-tile",
+        str(start_tile),
+        "--worker-end-tile",
+        str(end_tile),
     ]
     if args.keep_tiles:
         cmd.append("--keep-tiles")
@@ -120,9 +147,8 @@ def _run_child_process(args, start_tile: int, end_tile: int, temp_dir: Path,
         print(f"Recorded crashed tile: {start_tile}", flush=True)
         return []
     mid_tile = (start_tile + end_tile) // 2
-    return (
-        _run_child_process(args, start_tile, mid_tile, temp_dir, crashed_tiles)
-        + _run_child_process(args, mid_tile + 1, end_tile, temp_dir, crashed_tiles)
+    return _run_child_process(args, start_tile, mid_tile, temp_dir, crashed_tiles) + _run_child_process(
+        args, mid_tile + 1, end_tile, temp_dir, crashed_tiles
     )
 
 
@@ -173,9 +199,7 @@ def run_pipeline(args):
             while start <= end_tile:
                 chunk_end = min(start + args.chunk_size - 1, end_tile)
                 print(f"Running child chunk: {start}-{chunk_end}", flush=True)
-                all_detections.extend(
-                    _run_child_process(args, start, chunk_end, temp_dir, crashed_tiles)
-                )
+                all_detections.extend(_run_child_process(args, start, chunk_end, temp_dir, crashed_tiles))
                 start = chunk_end + 1
     else:
         # 直接推理模式（无子进程容错）
@@ -187,8 +211,11 @@ def run_pipeline(args):
                 if tile_id < args.start_tile or tile_id > end_tile or tile_id in skip_tiles:
                     continue
                 png_path = write_tile(
-                    dataset, record, tile_cache_dir,
-                    tile_size=args.tile_size, debug=args.debug,
+                    dataset,
+                    record,
+                    tile_cache_dir,
+                    tile_size=args.tile_size,
+                    debug=args.debug,
                     overwrite=args.overwrite_tiles,
                 )
                 if png_path is None:
@@ -198,10 +225,16 @@ def run_pipeline(args):
                     print(f"Prepared tile {tile_id}, valid_tiles={len(candidates)}", flush=True)
         model = load_model(str(model_path), args.device)
         for batch in batched(candidates, max(1, args.batch_size)):
-            all_detections.extend(predict_png_batch(
-                model, batch,
-                conf=args.conf, iou=args.iou, max_det=args.max_det, imgsz=args.imgsz,
-            ))
+            all_detections.extend(
+                predict_png_batch(
+                    model,
+                    batch,
+                    conf=args.conf,
+                    iou=args.iou,
+                    max_det=args.max_det,
+                    imgsz=args.imgsz,
+                )
+            )
             last_tile = batch[-1]["tile_id"]
             if args.log_every > 0:
                 print(f"Predicted through tile {last_tile}, detections={len(all_detections)}", flush=True)
@@ -214,7 +247,9 @@ def run_pipeline(args):
 
     # 记录崩溃瓦片
     if crashed_tiles:
-        crash_log = Path(args.crash_log) if getattr(args, "crash_log", None) else out_path.with_suffix(".crashed_tiles.txt")
+        crash_log = (
+            Path(args.crash_log) if getattr(args, "crash_log", None) else out_path.with_suffix(".crashed_tiles.txt")
+        )
         crash_log.parent.mkdir(parents=True, exist_ok=True)
         crash_log.write_text("\n".join(str(tile) for tile in crashed_tiles) + "\n", encoding="utf-8")
         print(f"Crashed tiles: {','.join(str(tile) for tile in crashed_tiles)}", flush=True)
