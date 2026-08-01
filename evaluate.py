@@ -1,18 +1,19 @@
 """
-松材线虫病目标检测 - 模型评估脚本
+松材线虫病目标检测 - 模型评估脚本.
 
 在测试集上计算 mAP 等指标，并输出可视化推理结果。
 """
 
 from pathlib import Path
+
 from ultralytics import YOLO
 
 BASE_DIR = Path(__file__).resolve().parent
 
 # ========== 配置区域 ==========
 MODEL_PATH = BASE_DIR / "runs/detect/runs/pine_wilt/yolo26l_exp2/weights/best.pt"
-DATA_YAML  = BASE_DIR / "datasetyolov11" / "data.yaml"
-TEST_IMGS  = BASE_DIR / "datasetyolov11" / "test" / "images"
+DATA_YAML = BASE_DIR / "datasetyolov11" / "data.yaml"
+TEST_IMGS = BASE_DIR / "datasetyolov11" / "test" / "images"
 # ==============================
 
 # 若 best.pt 不存在，尝试自动查找
@@ -47,4 +48,4 @@ results = model.predict(
     project="runs/pine_wilt",
     name="test_predict",
 )
-print(f"结果图保存至: runs/pine_wilt/test_predict/")
+print("结果图保存至: runs/pine_wilt/test_predict/")
