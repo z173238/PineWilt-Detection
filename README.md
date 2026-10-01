@@ -14,16 +14,16 @@
 
 ### 模型指标
 
-| 指标 | 值 |
-|------|-----|
-| 模型 | YOLO26l |
-| mAP@0.5 | **0.8549** |
-| mAP@0.5:0.95 | **0.4003** |
-| 输入尺寸 | 640×640 |
-| 类别数 | 1 (`bad_tree`) |
-| 训练集 | 4301 张 |
-| 硬件 | 2×RTX 5090 32GB |
-| 训练轮次 | 70（best at epoch 20） |
+| 指标         | 值                     |
+| ------------ | ---------------------- |
+| 模型         | YOLO26l                |
+| mAP@0.5      | **0.8549**             |
+| mAP@0.5:0.95 | **0.4003**             |
+| 输入尺寸     | 640×640                |
+| 类别数       | 1 (`bad_tree`)         |
+| 训练集       | 4301 张                |
+| 硬件         | 2×RTX 5090 32GB        |
+| 训练轮次     | 70（best at epoch 20） |
 
 ## 目录结构
 
@@ -137,7 +137,7 @@ with rasterio.open('image.tif') as ds:
 MID=$((TOTAL / 2))
 
 python predict.py --image image.tif --out gpu0.shp --device 0 --start-tile 1 --end-tile $MID &
-python predict.py --image image.tif --out gpu1.shp --device 1 --start-tile $((MID+1)) --end-tile $TOTAL &
+python predict.py --image image.tif --out gpu1.shp --device 1 --start-tile $((MID + 1)) --end-tile $TOTAL &
 wait
 
 ogrmerge.py -single -o merged.shp gpu0.shp gpu1.shp
@@ -152,27 +152,27 @@ python evaluate.py
 
 ## 推理参数说明
 
-| 参数 | 默认值 | 说明 |
-|------|--------|------|
-| `--image` | (必填) | 输入 GeoTIFF 影像路径 |
-| `--out` | (必填) | 输出 Shapefile 路径 |
-| `--model` | best.pt | YOLO 模型权重路径 |
-| `--conf` | 0.25 | 置信度阈值 |
-| `--iou` | 0.7 | 瓦片级 NMS IoU 阈值 |
-| `--merge-iou` | 0.5 | 全局跨瓦片 NMS IoU 阈值 |
-| `--tile-size` | 640 | 瓦片像素尺寸 |
-| `--overlap` | 128 | 瓦片间重叠像素 |
-| `--imgsz` | 640 | YOLO 推理图像尺寸 |
-| `--batch-size` | 8 | 每批推理瓦片数 |
-| `--chunk-size` | 50 | 每个子进程处理的瓦片数 |
-| `--device` | 0 | 推理设备（"0", "cpu" 等） |
-| `--max-det` | 300 | 每瓦片最大检测数 |
-| `--start-tile` | 1 | 起始瓦片索引（1-based） |
-| `--end-tile` | 0 | 结束瓦片索引（0=全部） |
-| `--skip-tiles` | "" | 跳过的瓦片索引（逗号分隔） |
-| `--keep-tiles` | False | 保留缓存 PNG 瓦片 |
-| `--no-subprocess` | False | 禁用子进程容错 |
-| `--debug` | False | 打印瓦片级调试信息 |
+| 参数              | 默认值  | 说明                       |
+| ----------------- | ------- | -------------------------- |
+| `--image`         | (必填)  | 输入 GeoTIFF 影像路径      |
+| `--out`           | (必填)  | 输出 Shapefile 路径        |
+| `--model`         | best.pt | YOLO 模型权重路径          |
+| `--conf`          | 0.25    | 置信度阈值                 |
+| `--iou`           | 0.7     | 瓦片级 NMS IoU 阈值        |
+| `--merge-iou`     | 0.5     | 全局跨瓦片 NMS IoU 阈值    |
+| `--tile-size`     | 640     | 瓦片像素尺寸               |
+| `--overlap`       | 128     | 瓦片间重叠像素             |
+| `--imgsz`         | 640     | YOLO 推理图像尺寸          |
+| `--batch-size`    | 8       | 每批推理瓦片数             |
+| `--chunk-size`    | 50      | 每个子进程处理的瓦片数     |
+| `--device`        | 0       | 推理设备（"0", "cpu" 等）  |
+| `--max-det`       | 300     | 每瓦片最大检测数           |
+| `--start-tile`    | 1       | 起始瓦片索引（1-based）    |
+| `--end-tile`      | 0       | 结束瓦片索引（0=全部）     |
+| `--skip-tiles`    | ""      | 跳过的瓦片索引（逗号分隔） |
+| `--keep-tiles`    | False   | 保留缓存 PNG 瓦片          |
+| `--no-subprocess` | False   | 禁用子进程容错             |
+| `--debug`         | False   | 打印瓦片级调试信息         |
 
 ## 容错机制
 
@@ -185,16 +185,16 @@ python evaluate.py
 
 ## 输出 Shapefile 字段
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `cls_id` | int | 类别 ID |
-| `cls_name` | str | 类别名称 |
-| `conf` | float | 置信度 |
-| `x1_pix` | float | 检测框左上角 X（像素坐标） |
-| `y1_pix` | float | 检测框左上角 Y（像素坐标） |
-| `x2_pix` | float | 检测框右下角 X（像素坐标） |
-| `y2_pix` | float | 检测框右下角 Y（像素坐标） |
-| `tile_id` | int | 来源瓦片编号 |
+| 字段       | 类型  | 说明                       |
+| ---------- | ----- | -------------------------- |
+| `cls_id`   | int   | 类别 ID                    |
+| `cls_name` | str   | 类别名称                   |
+| `conf`     | float | 置信度                     |
+| `x1_pix`   | float | 检测框左上角 X（像素坐标） |
+| `y1_pix`   | float | 检测框左上角 Y（像素坐标） |
+| `x2_pix`   | float | 检测框右下角 X（像素坐标） |
+| `y2_pix`   | float | 检测框右下角 Y（像素坐标） |
+| `tile_id`  | int   | 来源瓦片编号               |
 
 ## 更新日志
 
